@@ -1,47 +1,25 @@
 
-import java.awt.Color;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Writer;
-import java.math.BigInteger;
-import java.nio.file.Files;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
-
-import javax.swing.JFrame;
-import javax.swing.SwingUtilities;
-
-
-import javax.swing.JFrame;
-import javax.swing.JTextArea;
-
 
 
 
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
-import java.util.Set;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.Vector;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import static java.nio.file.StandardCopyOption.*;
+ 
 
  
  
@@ -52,7 +30,7 @@ public class CommunityDetection {
 	static int line_counter=0;
 	public static int selfLoops=0;
     String lineStr="";
-    
+    int benefitGroupBy=2; 
     String parms="";
     public double SFContribution=0.2;
     static int vertice_count,v2;
@@ -85,7 +63,22 @@ public class CommunityDetection {
     public String inputFileName;
     
 	 
- 
+    public static class DateUtils {
+        public static final String DATE_FORMAT_NOW = "yyyy-MM-dd HH:mm:ss";
+
+        public static String now() {
+          Calendar cal = Calendar.getInstance();
+          SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_NOW);
+          return sdf.format(cal.getTime());
+
+        }
+        public static String now(String dateFormat) {
+            Calendar cal = Calendar.getInstance();
+            SimpleDateFormat sdf = new SimpleDateFormat(dateFormat);
+            return sdf.format(cal.getTime());
+
+          }
+      }
      
     
    
@@ -109,7 +102,7 @@ public class CommunityDetection {
 	 
     
     public HashMap<Integer,Integer> CommunityCount;
-	public int CDwPN_method=0;
+	public int CDwBN_method=2;
 	private int networkSize;
 	private enum gmlFileFormat 
 	{ node, label, id, source, target, value, edge,novalue ; 
@@ -164,109 +157,299 @@ public class CommunityDetection {
    
     
     
-    
-
-    public static class DateUtils {
-      public static final String DATE_FORMAT_NOW = "yyyy-MM-dd HH:mm:ss";
-
-      public static String now() {
-        Calendar cal = Calendar.getInstance();
-        SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_NOW);
-        return sdf.format(cal.getTime());
-
-      }
-      public static String now(String dateFormat) {
-          Calendar cal = Calendar.getInstance();
-          SimpleDateFormat sdf = new SimpleDateFormat(dateFormat);
-          return sdf.format(cal.getTime());
-
-        }
-    }
-    
-   
-    
 
     
-    
-    public void constructPreferenceNetwork(DynamicArray D1[],boolean logging)
+    public void calculateEdgeWeights(DynamicArray D1[])
     {
-    	HashMap<Integer,Double> firstScores=new HashMap<Integer,Double>();
-    	HashMap<Integer,Double> secondScores=new HashMap<Integer,Double>();
-    	HashMap<Integer,Double> finalScores=new HashMap<Integer,Double>();
-    	 
-    	//Initialize communities of size-1 (self communities)
-    	for(int i=0;i<D1.length;i++)
-    		D1[i].communityID=i;
+    	System.out.println(DateUtils.now()+" FUNCTION-calculateEdgeWeights started---------------");
+
+    	int loopCounter=0;
+    	int printFreq=50000;
     	
-    	for(int i=0;i<D1.length;i++)
+    	// based on commonNeighbours
+    	for(int i=0;i<D1.length;i++)  
     	{
-    		double maxContribution=0;
-    		double maxScore=0;
-    		firstScores.clear();
-    		secondScores.clear();
-    		finalScores.clear();
-    		
-    		int Idx=i;
-    		int AltIdx=i;
     		for(int j=0;j<D1[i].neighbour_count;j++)
     		{
     			int neighbourID=D1[i].get(j);
-    			double contribution=(double)D1[neighbourID].getEdgeWeight(i);
-    			double myContribution=(double)D1[i].getEdgeWeight(neighbourID);
-    			double alternateContribution=0;
-
-    			double totalContribution=0;
-    			totalContribution=contribution;
-    			alternateContribution=myContribution;
-
-    			if(contribution>=maxContribution)
-    			{
-    				maxContribution=contribution;
-    				Idx=neighbourID;
-    				firstScores.put(neighbourID,totalContribution);
-    				secondScores.put(neighbourID, alternateContribution);	
-    			}	
+    			int CN=this.calculateCommonNeighbours(D1, i, neighbourID);
+    			D1[i].setEdgeWeight(neighbourID, CN);
+    			//D1[neighbourID].setEdgeWeight(i, edgeWeight);
+    			loopCounter++;
+    			if(loopCounter%printFreq==0)
+    				System.out.println(DateUtils.now()+"         --> calculateEdgeWeight counter:"+loopCounter);
     		}
-    		//Just insert the neighbour having highest contribution
-    		finalScores.clear();
+    	}
+
+    	System.out.println(DateUtils.now()+" FUNCTION-calculateEdgeWeights ended---------------");
+    }
+
+    
+    
+    
+    public void communityDetectionBoundaryNodes(DynamicArray D1[]) throws IOException
+    {
+    	System.out.println(DateUtils.now()+" FUNCTION communityDetectionBoundaryNodes started---------------");
+ 
+    	int loopTotalCounter=0;
+	
+    	Stack<Integer> boundaryNodeStack=new Stack<Integer>();
+    	HashMap<Integer,Double> benefitScores=new HashMap<Integer,Double>();
+    	HashMap<Integer,Integer> communityMembers=new HashMap<Integer,Integer>();
+    	 
+    	//0- Initialize communities so that each node is inside its community of size 1
+    	for(int i=0;i<D1.length;i++)
+    		D1[i].communityID=i;
+
+    	//0.1 - Set edge weights ------------------------------------------------------------------------------	 	
+    	calculateEdgeWeights(D1);
+    	
+    	//0.1.end ---------------------------------------------------------------------------------------------
+    	
+    	//1-Initial heuristic 
+    	for(int i=0;i<D1.length;i++)
+    	{
+    		double maxW=0;
+    		int idx=i;
+    		for(int j=0;j<D1[i].neighbour_count;j++)
     		{
-    			Iterator<Integer> J1=firstScores.keySet().iterator();
+    			int neighbourID=D1[i].get(j);
+    			double w=D1[i].getEdgeWeight(neighbourID);
+    			if(w>maxW)
+    			{
+    				maxW=w;
+    				idx=neighbourID;				
+    			}
+    		}
+    		//set communityID with the highest argmax{edgeWeight} in neighbourhood
+    		D1[i].communityID=D1[idx].communityID;
+
+    	}
+    	
+    	System.out.println(DateUtils.now()+"         --> boundaryNodes initialization done!");
+    	//------- End of initialization -----------------------------------------------------------------------
+    	
+    	
+    	//2-Decide the communities of the boundary nodes --------------------------------------------------------
+    	//2.1 Initialize boundary node stack
+    	for(int i=0;i<D1.length;i++)
+    	{
+    		for(int j=0;j<D1[i].neighbour_count;j++)
+    		{
+    			int neighbourID=D1[i].get(j);
+    			if(D1[i].communityID!=D1[neighbourID].communityID && D1[i].boundaryState==0)
+    			{
+    				boundaryNodeStack.push(i);
+    				D1[i].boundaryNodeStateCounter++;
+    				loopTotalCounter++;
+    				D1[i].boundaryState=1;		
+    				break;
+    			}
+    		}
+    	}
+    	
+    	System.out.println(DateUtils.now()+"         --> Initial boundary stack size="+boundaryNodeStack.size());
+    	
+    	//-------- End of decide communities of boundary nodes  -----------------------------------------------
+    	
+
+    	//3-Merge LOOP - Loop while boundaryNodeStack is not empty, merge boundary nodes with communities.
+    	int loopCount=0;
+    	int messageFreq=5000;
+    	while(!boundaryNodeStack.isEmpty())
+    	{
+    		loopCount++;
+    		loopTotalCounter++;
+    		int currentID=0;
+    	 
+    		//Random order. Get element from stack with random index and remove it
+    		//-----------------------------------------------------------------------------
+    		{
+    			int randIndex=rand1.nextInt(boundaryNodeStack.size());
+    			currentID=boundaryNodeStack.remove(randIndex);
+    		}
+    		 
+    		//--------------------------------------------------------------
+    		D1[currentID].boundaryState=0;
+    		if((loopCount%messageFreq)==0)
+    		{
+    			System.out.println(DateUtils.now()+"         --> communityDetection counter:"+loopCount+" boundaryNodeStack.size:"+boundaryNodeStack.size()+" current node D["+currentID+"].k:"+D1[currentID].neighbour_count);
+    		}
+    		 
+    		//evaluate the benefits
+    		benefitScores.clear();
+    		communityMembers.clear();
+    		
+    		
+    		
+    		 
+    		for(int i=0;i<D1[currentID].neighbour_count;i++)
+    		{
+    			int neighbourID=D1[currentID].get(i);
+    			int commID=D1[neighbourID].communityID;	
+    			double benefit=D1[currentID].getEdgeWeight(neighbourID);
+
+    			// benefitGroupBy parameter ------------------------------------------------------
+    			// 0 : Scores are for each neighbor
+    			// 1 : Scores are group summed for each community --------------------------------
+    			if(benefitGroupBy==1)
+    			{
+    				benefitScores.put(neighbourID, benefit);
+    			}
+
+    			if(benefitGroupBy==2)
+    			{
+    				if(benefitScores.get(commID)!=null)
+    				{
+    					double score=benefitScores.get(commID);
+    					benefitScores.put(commID, score+benefit);
+    				}
+    				else
+    				{
+    					benefitScores.put(commID, benefit);
+    				}
+
+    				//---------------------------------------------------------------------------
+    				// Size of the communities
+    				if(communityMembers.get(commID)==null)
+    				{
+    					communityMembers.put(commID,1);
+    				}
+    				else
+    				{
+    					int X=communityMembers.get(commID);
+    					communityMembers.put(commID, X+1);
+    				}
+    				//---------------------------------------------------------------------------
+    			}	   				
+    		}
+
+    		//-----------------------------------------------------------------------------------------
+    		//Find max benefit score and its ID
+    		//-----------------------------------------------------------------------------------------
+    		Iterator<Integer> STkey=benefitScores.keySet().iterator();
+    		double highestScore=-999999;
+    		int highestCommID=-1;
+        	while(STkey.hasNext())
+        	{
+        		Object IDx=STkey.next();
+        		double currentScore=benefitScores.get(IDx);
+        		if(currentScore>highestScore)
+        		{
+        			highestScore=currentScore;
+        			highestCommID=Integer.valueOf(IDx.toString());
+        		}
+        	}
+        	//-----------------------------------------------------------------------------------------
+        	
+        	
+        	
+        	//------ Find the neighbours having highest score; i.e. may be more than 1 ---------------------------
+        	HashMap<Integer,Double> finalScores=new HashMap<Integer,Double>();
+        	
+        	//----- Put into finalScores hashMap -----------------------------------------------------------------
+        	finalScores.clear();
+    		{
+    			Iterator<Integer> J1=benefitScores.keySet().iterator();
     			while(J1.hasNext())
     			{
     				Object ID=J1.next();
-    				double scoreVal=firstScores.get(ID);
-    				if(scoreVal==maxContribution)
+    				double scoreVal=benefitScores.get(ID);
+    				if(scoreVal==highestScore)
     					finalScores.put(Integer.valueOf(ID.toString()), scoreVal);
     			}	
     		}
-    		// maxContribution is found
-    		//if there are more than 1 maxContribution, then look at the alternateContribution
-    		{// No alternate scores
-    			if(finalScores.size()>0)
+    		//----------------------------------------------------------------------------------------------------
+    		
+    		// TIE-SITUATIONS ------------------------------------------------------------------------------------
+    		int maxScore;
+ 
+    		//------------------------- TIE SITUATIONS ---------------------------------------------------------------
+    		//--- IF currentCommID is already in finalScores then no update
+    		int currentCommIDofNode=D1[currentID].communityID;
+
+    		if(finalScores.size()>0)
+    			if(finalScores.get(currentCommIDofNode)==null)
     			{
     				maxScore=0;		
-    				int randInt=rand1.nextInt(finalScores.size());	
-    				int randCntr=0;
-    				Iterator<Integer> I1=finalScores.keySet().iterator();
-    				while(I1.hasNext())
-    				{
-    					Object IDx1=I1.next();
-    					if(randCntr++==randInt)
-    					{
-    						int neighbourIdx=Integer.valueOf(IDx1.toString());
-    						D1[i].communityID=D1[neighbourIdx].communityID; 
-    						break;
-    					}
-    				}
+    				//----------- select an item randomly ----------------------
+    				int randomIDx=rand1.nextInt(finalScores.keySet().size());
+    				Object ID=finalScores.keySet().toArray()[randomIDx];
+    				highestCommID=Integer.valueOf(ID.toString());
+    				//----------------------------------------------------------
     			}
     			else
-    				D1[i].communityID=i;
-    		}		
+    			{
+    				highestCommID=currentCommIDofNode;
+    			}
+
+    		// End of TIE-SITUATIONS -------------------------------------------------------------------------------- 
+
+ 
+        
+        	int currentNodeCommID=D1[currentID].communityID;
+          
+        	
+        	
+        	if(currentNodeCommID!=highestCommID)
+        	{
+        		//Community ID changes
+
+        		int oldCommID=D1[currentID].communityID;
+        		D1[currentID].communityID=highestCommID;
+        		D1[currentID].CIDchangeCount++;
+        		String tmpHistory=DateUtils.now()+";"+lineCounter+";Node;"+currentID+";oldCID;"+oldCommID+";newCommID;"+highestCommID+";changeCount;"+D1[currentID].CIDchangeCount;
+        		D1[currentID].writeLog(tmpHistory);
+       
+
+        		//Insert neighbours belonging to old communityID to the stack (they are new border nodes)
+        		for(int i=0;i<D1[currentID].neighbour_count;i++)
+        		{
+        			int neighbourID=D1[currentID].get(i);
+        			//------------------------------------------------
+        			int nodeCommID=D1[currentID].communityID;
+        			int neighbourCommID=D1[neighbourID].communityID;
+
+        			nodeCommID=D1[currentID].communityID;
+        			neighbourCommID=D1[neighbourID].communityID;
+
+        			//------------------------------------------------
+
+        			if(nodeCommID!=neighbourCommID && D1[neighbourID].boundaryState==0)
+        			{	
+        				boundaryNodeStack.push(neighbourID);
+        				D1[neighbourID].boundaryNodeStateCounter++;
+        				D1[neighbourID].boundaryState=1;
+
+        			}
+        		}
+        	}
+
     	}
+    	//--------- END  OF MERGE LOOP --------------------------------------------------------------------
+    	
+    	//---- find communities   -------------------------------------------------------------------------
+
+    	{	
+    		System.out.println(DateUtils.now()+"         --> findCommunityOfNode for whole network started");
+    		for(int i=0;i<D1.length;i++)
+    		{
+    			D1[i].communityArc=D1[i].communityID; // Store the direct arc that leads to community core
+    			int communityID=this.findCommunityOfNode(D1,i);
+    		 
+    			D1[i].communityID=communityID;
+    			 
+    		}
+    	}
+    	//---- end of find communities using preference network -------------------------------------------
+
+    	System.out.println(DateUtils.now()+"         --> totalLoopCount:"+loopTotalCounter);
+    	System.out.println(DateUtils.now()+" FUNCTION-communityDetectionBoundaryNodes ended---------------");
+    	 
     	
     }
     
-    
+   
     
     public int findCommunityOfNode(DynamicArray D1[],int ID)
     { 	 
@@ -341,14 +524,7 @@ public class CommunityDetection {
     public String communityDetection(String fileN) throws IOException
     {
     	 
-    	Random randNumber=new Random(System.currentTimeMillis());		
-    	 
-    	HashMap<Integer,Integer> neighbourMap=new HashMap<Integer,Integer>();
-    	Stack<Integer> tempGossipStack=new Stack<Integer>();
-    	double cascadeSize=0;
-    	int currentSpreader=0;
-    	int currentVictimN=0;
-    	double spreadF=0.0,deltaSF=0.0;
+
     	 
     	inputFileName=fileN;
 
@@ -361,111 +537,42 @@ public class CommunityDetection {
 		if(inputFileName.contains(".dat"))				
 			this.readDATformat(inputFileName);
 	 
-		networkSize=this.vertice_count;
 		
 
-    	//Alternative-1: Common neighbors-----------------------------------------------------------------------------------------
-    	if(CDwPN_method==0) //Common neighbours as edge weights
+    	//Option-1: Community detection using boundary node - INDIVIDUAL APPROACH---------------------------------
+    	if(CDwBN_method==1) //Common neighbours with individual approach
     	{
+    		System.out.println(DateUtils.now()+"         --> CDwBN with Individual approach is running");
     		for(int i=0;i<MainArray.length;i++)
     			for(int j=0;j<MainArray[i].neighbour_count;j++)
     			{
     				int neighbourID=MainArray[i].get(j);
     				int commonNeighbours=this.calculateCommonNeighbours(MainArray, i, neighbourID);
     				MainArray[i].setEdgeWeight(neighbourID, commonNeighbours);
-    			}		 	
+    			}		
+    		this.benefitGroupBy=1;
     	}
     	//------------------------------------------------------------------------------------------------------------------------
 
     	
-    	// Alternative-2: Spread capability (Gossip algorithm)--------------------------------------------------------------------
-    	if (CDwPN_method==1)
+    	//Option-2: Community detection using boundary node - INDIVIDUAL APPROACH------------------------------------------------------------
+    	if (CDwBN_method==2)
     	{ 	
-    		Stack<Integer> cascadeMembers=new Stack<Integer>();
-    		//1.1 Spread_GOSSIP.start -------------------------------------------------------------------------------------------
+    		System.out.println(DateUtils.now()+"         --> CDwBN with Group approach is running");
     		for(int i=0;i<MainArray.length;i++)
-    		{
-    			neighbourMap.clear();
-    			cascadeSize=1;
-    			spreadF=0.0;
-    			deltaSF=0.0;
-    		 
-    			
-    			//1.2 Put neighbours into array as originators -----------------------------------------------------------------
     			for(int j=0;j<MainArray[i].neighbour_count;j++)
     			{
-    				int x=MainArray[i].get(j);
-    				MainArray[x].state=-(i+1);
-    				MainArray[i].state=0;
-    				neighbourMap.put(x, x);
-    				//if(debugMode) System.out.print(x+"-");
-    			} 
-    			currentVictimN=MainArray[i].neighbour_count;
-    			
-    			//1.3 select neighbours as originators one-by-one  --------------------------------------------------------------
-    			while(!neighbourMap.isEmpty())
-    			{
-    				Iterator<Integer> STkey=neighbourMap.keySet().iterator();
-    				while(STkey.hasNext())
-    				{
-    					Object IDx=STkey.next();
-    					currentSpreader=neighbourMap.get(IDx);
-    					neighbourMap.remove(IDx);
-    					tempGossipStack.push(currentSpreader);
-    					cascadeSize=1;
-    					deltaSF=0.0;
-    					break;
-    				}
-    				cascadeMembers.clear();
-    				int initiatorID=currentSpreader;
-    				cascadeMembers.push(initiatorID);
-    				
-    			//1.3.1 start spreading gossip with the selected originator	-----------------------------------------------------
-    				while(!tempGossipStack.isEmpty())
-    				{		 
-    					currentSpreader=tempGossipStack.pop();
-    					//1.3.1.1 find members on spreading cascade ------------------------------------------------------------- 
-    					for(int k=0;k<MainArray[currentSpreader].neighbour_count;k++)
-    					{	
-    						int id1=MainArray[currentSpreader].get(k);
-    						MainArray[currentSpreader].state=0;
-    						int y=MainArray[id1].state+(i+1);
-    						if(y==0)
-    						{
-    							MainArray[id1].state=0;
-    							cascadeSize++;
-    							neighbourMap.remove(id1);
-    							cascadeMembers.push(id1);
-    							tempGossipStack.push(id1);
-    						}
-    					}
-    					//1.3.1.1.end -------------------------------------------------------------------------------------------- 
-    				}
-    				//1.3.1.end - spread with the selected originator finished ---------------------------------------------------
-    				deltaSF=((double)(cascadeSize*cascadeSize))/(currentVictimN*currentVictimN);
-    				//1.3.2 set SF for each cascade members ----------------------------------------------------------------------
-    				while(!cascadeMembers.empty())
-    				{
-    					int cascadeMemberIDX=cascadeMembers.pop();
-    					MainArray[cascadeMemberIDX].setEdgeWeight(i,deltaSF);
-    				}
-    				//1.3.2.end -------------------------------------------------------------------------------------------------   				
-    				spreadF=spreadF+deltaSF;			 
-    			}
-    			//1.3.end --------------------------------------------------------------------------------------------------------	
-    			//1.4 set SF values ----------------------------------------------------------------------------------------------
-    			MainArray[i].SF=spreadF*MainArray[i].neighbour_count;  
-    			 
-    			if(MainArray[i].neighbour_count<2)
-    				MainArray[i].SF=0;
-    			//1.4.end --------------------------------------------------------------------------------------------------------
-    		} // end of for loop
-    		//1.1 end ------------------------------------------------------------------------------------------------------------
+    				int neighbourID=MainArray[i].get(j);
+    				int commonNeighbours=this.calculateCommonNeighbours(MainArray, i, neighbourID);
+    				MainArray[i].setEdgeWeight(neighbourID, commonNeighbours);
+    			}		
+    		this.benefitGroupBy=2;
 		}
     	//1.end ------------------------------------------------------------------------------------------------------------------
 
-    	//Construct preference network using highest edge weight for each node ---------------------------------------------------
-    	constructPreferenceNetwork(MainArray, false);
+
+    	// Community detection algorithm
+    	this.communityDetectionBoundaryNodes(MainArray);
 
     	CommunityCount.clear();
     	//Find communities using the constructed preference network --------------------------------------------------------------
@@ -499,7 +606,7 @@ public class CommunityDetection {
     
     public void printCMTYfile(DynamicArray D1[],String outputFileName) 
     {
-    	System.out.println(DateUtils.now()+"-FUNCTION-printCMTYfile started");
+    	System.out.println(DateUtils.now()+" FUNCTION-printCMTYfile started------------------------------");
     	System.out.println(DateUtils.now()+"         --> OutputFile:"+outputFileName);
     	
     	HashMap<Integer,String> communityMap=new HashMap<Integer,String>();
@@ -530,7 +637,11 @@ public class CommunityDetection {
     		communityMap.put(communityID, nodeLIST);
     	}
     	
-    	System.out.println(DateUtils.now()+"All communities are put into list. Number of distinct communities:"+communityMap.size());
+    	System.out.println(DateUtils.now()+"         -----------------------------------------");
+    	System.out.println(DateUtils.now()+"         --> Number of nodes      :"+D1.length);
+    	System.out.println(DateUtils.now()+"         --> Number of edges      :"+this.edge_count);
+    	System.out.println(DateUtils.now()+"         --> Number of communities:"+communityMap.size());
+    	System.out.println(DateUtils.now()+"         -----------------------------------------");
     	//1.end ---------------------------------------------------------------------------------
     	
     	
@@ -543,7 +654,7 @@ public class CommunityDetection {
     			writer = new BufferedWriter(new FileWriter(outputFileName, false),bufSize);
     		else //append the file
     			writer = new BufferedWriter(new FileWriter(outputFileName, true),bufSize);
-    		System.out.println(DateUtils.now()+"         -->Community (CMTY) file is being written");	
+    		System.out.println(DateUtils.now()+"         --> Community (CMTY) file is being written");	
 
     		Iterator<Integer> TI=communityMap.keySet().iterator();
     		while(TI.hasNext())
@@ -564,13 +675,13 @@ public class CommunityDetection {
     				}
     				writer.flush();
     				records.clear();
-    				System.out.println(DateUtils.now()+"         -->"+cacheLimit+" number of records written to disk");
+    				System.out.println(DateUtils.now()+"         --> "+cacheLimit+" number of records written to disk");
     			}
     		}
     		//2.end ---------------------------------------------------------------------------------
 
     		//3.Flush remaining records to disk
-    		System.out.println(DateUtils.now()+"         -->"+records.size() + " remaining records will be written");
+    		System.out.println(DateUtils.now()+"         --> "+records.size() + " remaining records will be written");
 
     		for (String record: records) {
     			writer.write(record);
@@ -581,8 +692,8 @@ public class CommunityDetection {
     	} catch (IOException e) {
     		e.printStackTrace();
     	}
-    	System.out.println(DateUtils.now()+"         --> CMTY file is written:"+outputFileName);
-    	System.out.println(DateUtils.now()+"-FUNCTION-printCMTYfile ended");
+    	System.out.println(DateUtils.now()+"         --> Communities are written to .cmty file:"+outputFileName);
+    	System.out.println(DateUtils.now()+" FUNCTION-printCMTYfile ended------------------------------");
     }
     
     
@@ -601,7 +712,7 @@ public class CommunityDetection {
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     public void readGMLformat(String inputfile)
     {
-    	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"-FUNCTION readGMLformat started");
+    	System.out.println(DateUtils.now()+" FUNCTION readGMLformat started------------------------------");
     	Vector<vertice> V1=new Vector<vertice>();
     	Vector<edge> E1=new Vector<edge>();
     	vertice v=new vertice(0,"");
@@ -684,7 +795,7 @@ public class CommunityDetection {
 			in1=inputStream.readLine();
 		}
 		
-	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->V1.size="+V1.size()+" E1.size="+E1.size());
+	System.out.println(DateUtils.now()+"         --> V1.size="+V1.size()+" E1.size="+E1.size());
 
 	vertice_count=V1.size();
 	this.networkSize=V1.size(); 
@@ -693,7 +804,7 @@ public class CommunityDetection {
 			MainArray[i]=new DynamicArray();	
    		
     
-   		System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"      --> doReadGML.starttime");
+   		System.out.println(DateUtils.now()+"         --> doReadGML.starttime");
    		 
    		i=0;
    		while(V1.size()>0)
@@ -714,7 +825,7 @@ public class CommunityDetection {
    			  MainArray[vertices.get(vTmp.id).nodeIndex].communityID=vTmp.communityID;
    			 
    			  if((line_counter%50000)==0){
-   			  	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Lines read:"+line_counter);
+   			  	System.out.println(DateUtils.now()+"         --> Lines read:"+line_counter);
    			  
    			  }
    			  line_counter++;
@@ -747,20 +858,20 @@ public class CommunityDetection {
    		
    			
    			if((line_counter%50000)==0)
-   			  	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Lines read:"+line_counter);
+   			  	System.out.println(DateUtils.now()+"         --> Lines read:"+line_counter);
    			   
    			line_counter++;
    			i++;  
    		}
-   		bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Lines read:"+line_counter+" "+DateUtils.now();
+   		bufferStr=DateUtils.now()+"         --> Lines read:"+line_counter+" "+DateUtils.now();
    	  	System.out.println(bufferStr);
    	  	 
    	   
    	  	
-   	  	bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat- Network file finished succesfully!";
-   	  	bufferStr=bufferStr+"\n"+DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Total weight of edges="+totalWeight;
-   	  	bufferStr=bufferStr+"\n"+DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Total number of nodes="+this.networkSize;
-   	  	bufferStr=bufferStr+"\n"+DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Total number of edges="+this.edge_count;
+   	  	bufferStr=DateUtils.now()+"         --> Network file finished succesfully!";
+   	  	bufferStr=bufferStr+"\n"+DateUtils.now()+"         --> Total weight of edges="+totalWeight;
+   	  	bufferStr=bufferStr+"\n"+DateUtils.now()+"         --> Total number of nodes="+this.networkSize;
+   	  	bufferStr=bufferStr+"\n"+DateUtils.now()+"         --> Total number of edges="+this.edge_count;
    	  	System.out.println(bufferStr);
    	  	 
    	    
@@ -771,7 +882,7 @@ public class CommunityDetection {
            e.printStackTrace();
    	}
   
-   	bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Number of vertices="+vertice_count;
+   	bufferStr=DateUtils.now()+"         --> Number of vertices="+vertice_count;
    	System.out.println(bufferStr);
     
     
@@ -781,11 +892,11 @@ public class CommunityDetection {
  	edge_count=edge_count+MainArray[i].neighbour_count;
  	edge_count=edge_count/2;
 	
-	bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readGMLformat-Number of edges="+edge_count;
+	bufferStr=DateUtils.now()+"         --> Number of edges="+edge_count;
 	System.out.println(bufferStr);
 	 
 	 
-	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"-FUNCTION readGMLformat ended");
+	System.out.println(DateUtils.now()+" FUNCTION readGMLformat ended------------------------------");
    
     }
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -795,8 +906,8 @@ public class CommunityDetection {
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     public  void readDATformat(String inputfile)
     {
-    	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"-FUNCTION-readDATformat started");
-    	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readDATformat- Reading file:"+inputfile);
+    	System.out.println(DateUtils.now()+" FUNCTION-readDATformat started------------------------------");
+    	System.out.println(DateUtils.now()+"         --> Reading file:"+inputfile);
     	int source = 0,target=0;
     	totalWeight=0.0;
     	vertice_count=0;
@@ -883,7 +994,7 @@ public class CommunityDetection {
     			counter++;
     			if(counter%printInterval==0)
     			{
-    				System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"          -->readDATformat- Reading lines:"+counter);
+    				System.out.println(DateUtils.now()+"         --> Reading lines:"+counter);
     			}
 
     			in1=inputStream.readLine();
@@ -900,7 +1011,7 @@ public class CommunityDetection {
     	this.networkSize=vertice_count;
     	vertice_temp=0;
 
-    	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readDATformat- Network size="+vertice_count);
+    	System.out.println(DateUtils.now()+"         --> Network size="+vertice_count);
 
     	MainArray=new DynamicArray[vertice_count];
     	for(int i=0;i<vertice_count;i++)
@@ -920,7 +1031,7 @@ public class CommunityDetection {
     		counter++;
     		if(counter%printInterval==0)
     		{
-    			System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"          -->readDATformat- MainArray entries inserted:"+counter);
+    			System.out.println(DateUtils.now()+"         --> MainArray entries inserted:"+counter);
     		}
 
     	}
@@ -953,11 +1064,11 @@ public class CommunityDetection {
     		counter++;
     		if(counter%printInterval==0)
     		{
-    			System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"          -->readDATformat- Edges are inserted:"+counter);
+    			System.out.println(DateUtils.now()+"         --> Edges are inserted:"+counter);
     		}
     	}
 
-    	bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readDATformat- Number of vertices="+vertice_count;
+    	bufferStr=DateUtils.now()+"         --> Number of vertices="+vertice_count;
     	System.out.println(bufferStr);
     	 
 
@@ -966,11 +1077,11 @@ public class CommunityDetection {
     		edge_count=edge_count+MainArray[i].neighbour_count;
     	edge_count=edge_count/2;
 
-    	bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readDATformat- Number of edges="+edge_count;
+    	bufferStr=DateUtils.now()+"         --> Number of edges="+edge_count;
     	System.out.println(bufferStr);
     	 
     	//write_to_log(bufferStr,logfile,0);
-    	System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"FUNCTION-readDATformat ended:");
+    	System.out.println(DateUtils.now()+" FUNCTION-readDATformat ended------------------------------");
     }
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     
@@ -979,6 +1090,7 @@ public class CommunityDetection {
     public  void readPajekformat(String inputfile,boolean AddExtraChars2Name ) throws IOException
    	{
     	 
+    	System.out.println(DateUtils.now()+" FUNCTION-readPajekformat started------------------------------");
     	   totalWeight=0.0;
     	   vertice_count=0;
     	   edge_count=0;
@@ -993,7 +1105,7 @@ public class CommunityDetection {
     	   String in1;
     	   try
     	   {
-    		   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Openning the file="+inputfile);
+    		   System.out.println(DateUtils.now()+"         --> Openning the file="+inputfile);
     		   FileReader inputFileReader= new FileReader(inputfile.replace("\"", "").trim());
     		   BufferedReader inputStream=new BufferedReader(inputFileReader);
 
@@ -1010,7 +1122,7 @@ public class CommunityDetection {
     		   for(int i=0;i<vertice_count;i++)
     			   MainArray[i]=new DynamicArray();	
 
-    		   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Network Size is:"+MainArray.length);
+    		   System.out.println(DateUtils.now()+"         --> Network Size is:"+MainArray.length);
     		  
 
     		   while (vertice_temp<vertice_count) 
@@ -1025,7 +1137,7 @@ public class CommunityDetection {
     			   tok_count--;
     			   }
     			   if(AddExtraChars2Name)
-    				   name=name.replace("\"", "")+"-"+userId;//names may not be unique 27.10.2015
+    				   name=name.replace("\"", "")+"-"+userId;//names may not be unique  
     			   else 
     				   name=name.replace("\"", "");
 
@@ -1039,7 +1151,7 @@ public class CommunityDetection {
     			   vertice_temp++;
 
     			   if((line_counter%50000)==0){
-    				   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Lines read:"+line_counter);
+    				   System.out.println(DateUtils.now()+"         --> Lines read:"+line_counter);
 
     			   }
     			   line_counter++;
@@ -1062,7 +1174,7 @@ public class CommunityDetection {
     			   //check the loop and avoid loops 
     			   if (idx1==idx2)
     			   {
-    				   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"readPajekformat-self loop for ID:"+idx1);
+    				   System.out.println(DateUtils.now()+"         --> self loop for ID:"+idx1);
     				   selfLoops++;
     				   in1=inputStream.readLine();
     				   continue;
@@ -1074,7 +1186,7 @@ public class CommunityDetection {
 
     					   weight=ts.getDouble();
     				   }catch(NoSuchElementException e){
-    					   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"readPajekformat-NoSuchElement for weight:");
+    					   System.out.println(DateUtils.now()+"         --> NoSuchElement for weight:");
     					   e.printStackTrace();
     					   isNetworkWeighted=0;
     				   }
@@ -1094,16 +1206,16 @@ public class CommunityDetection {
     			   in1=inputStream.readLine();
 
     			   if((line_counter%50000)==0)
-    			   {System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Lines read:"+line_counter);
+    			   {System.out.println(DateUtils.now()+"         --> Lines read:"+line_counter);
 
     			   }
     			   line_counter++;
     		   }
-    		   bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Lines read:"+line_counter;
+    		   bufferStr=DateUtils.now()+"         --> Lines read:"+line_counter;
     		   System.out.println(bufferStr);
 
-    		   bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Network file finished succesfully!";
-    		   bufferStr=bufferStr+"\n"+DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Total weight of edges="+totalWeight;
+    		   bufferStr=DateUtils.now()+"         --> Network file finished succesfully!";
+    		   bufferStr=bufferStr+"\n"+DateUtils.now()+"         --> Total weight of edges="+totalWeight;
     		   System.out.println(bufferStr);
 
     		   inputStream.close();
@@ -1119,10 +1231,10 @@ public class CommunityDetection {
     			   numberOfIslands++;
     	   }
 
-    	   bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Number of vertices="+vertice_count;
+    	   bufferStr=DateUtils.now()+"         --> Number of vertices="+vertice_count;
     	   System.out.println(bufferStr);
-    	   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Number of islands="+numberOfIslands);
-    	   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Number of self loops avoided="+selfLoops);
+    	   System.out.println(DateUtils.now()+"         --> Number of islands="+numberOfIslands);
+    	   System.out.println(DateUtils.now()+"         --> Number of self loops avoided="+selfLoops);
 
 
     	   //  ****COUNT ALL THE EDGES
@@ -1130,10 +1242,10 @@ public class CommunityDetection {
     		   edge_count=edge_count+MainArray[i].neighbour_count;
     	   edge_count=edge_count/2;
 
-    	   bufferStr=DateUtils.now()+"-("+lineCounter+")-"+"         -->readPajekformat-Number of edges="+edge_count;
+    	   bufferStr=DateUtils.now()+"         --> Number of edges="+edge_count;
     	   System.out.println(bufferStr);
  
-    	   System.out.println(DateUtils.now()+"-("+lineCounter+")-"+"-FUNCTIION-readPajekformat ended");
+    	   System.out.println(DateUtils.now()+" FUNCTIION-readPajekformat ended------------------------------");
    	}
  
 }
