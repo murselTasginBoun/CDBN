@@ -1,7 +1,16 @@
-<<<<<<< HEAD
-# CDPN
-Community Detection using Preference Networks - Source code repository
-=======
+
 # CDBN
 Community Detection using Boundary Nodes - Java source codes
->>>>>>> 6e54894b41645f26b33831a8ed01c0b706d771b1
+
+------Community detection using boundary nodes ------------------------------
+|>> Citation info >>:                                                        |
+| Tasgin, M. and H. O. Bingol, “Community detection using boundary nodes in  |
+| complex networks”, Physica A: Statistical Mechanics and its Applications   |
+| Vol.513,pp.315–324,2019                                                    |
+| http://www.sciencedirect.com/science/article/pii/S0378437118311658         |
+ ----------------------------------------------------------------------------
+
+Usage: CDwBN.jar inputfilename option
+Option:1           - CDwBN - Community detection using boundary nodes - Individual approach
+Option:2 (default) - CDwBN - Community detection using boundary nodes - Group approach
+
