@@ -12,6 +12,8 @@ Community Detection using Boundary Nodes - Java source codes
 
 ## Usage
 Usage: CDwBN.jar inputfilename option
+
 Option:1           - CDwBN - Community detection using boundary nodes - Individual approach
+
 Option:2 (default) - CDwBN - Community detection using boundary nodes - Group approach
 
