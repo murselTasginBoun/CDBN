@@ -2,7 +2,7 @@
 # CDBN
 Community Detection using Boundary Nodes - Java source codes
 
-##Community detection using boundary nodes 
+## Community detection using boundary nodes 
                                                     
  Tasgin, M. and H. O. Bingol, “Community detection using boundary nodes in  
  complex networks”, Physica A: Statistical Mechanics and its Applications   
@@ -10,7 +10,7 @@ Community Detection using Boundary Nodes - Java source codes
  http://www.sciencedirect.com/science/article/pii/S0378437118311658         
 
 
-##Usage
+## Usage
 Usage: CDwBN.jar inputfilename option
 Option:1           - CDwBN - Community detection using boundary nodes - Individual approach
 Option:2 (default) - CDwBN - Community detection using boundary nodes - Group approach
