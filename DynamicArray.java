@@ -31,12 +31,16 @@ public double shortestPathLengths;
 public int shortestPathCount; //number of shortest paths starting from this node
 public double betweenness;
 public int state;
- 
+
+public int boundaryState; //0: not a borderNode and not in borderStack, 1: borderNode in borderStack
+public int boundaryNodeStateCounter; //how many times its borderNode state changes
+
 public String neighbourList;
 public int communityID,communityArc;
 public int cascadeCount,cascadeCountW;
 public double SF;
 public int gossipSpreadCount;
+public int CIDchangeCount;
  
 public class edgeData
 {
@@ -84,6 +88,10 @@ public DynamicArray() {
    cascadeCount=0;
    cascadeCountW=0;
    SF=0.0;
+   
+   boundaryState=0; 
+   boundaryNodeStateCounter=0;  
+   CIDchangeCount=0;
   
 }
 
