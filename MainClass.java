@@ -47,7 +47,7 @@ public class MainClass {
 			{
 				System.out.println("Invalid option given!");
 				
-				System.out.println("Usage: CDwBN.jar inputfilename weightOption");
+				System.out.println("Usage: CDwBN.jar inputfilename option");
 				System.out.println("Option:1           - CDwBN - Community detection using boundary nodes - Individual approach");
 				System.out.println("Option:2 (default) - CDwBN - Community detection using boundary nodes - Group approach");
 				return;
