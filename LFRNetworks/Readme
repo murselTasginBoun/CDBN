@@ -1,0 +1,13 @@
+Description
+
+LFR networks are computer generated networks, given some parameters.
+We used LFR networks of 1000 nodes and 5000 nodes.
+
+We attached 10 sample networks with each mixing parameter for LFR networks consisting of 1000 nodes. 
+These generated networks also have their 'ground-truth' (planted) community structure files.
+Network files and community files match according to the suffix of filenames,
+i.e.,
+LFR_1000_15_50_C10_50_mix_0_1_1_1.net  has its community structure in file community_1_1.dat
+
+Naming convention for LFR network file is:
+LFR_(node_count)_(avg_degree)_(max_degree)_(min_community_size)_(max_community_Size)_(mixingParamter)_(Filesequence).net
